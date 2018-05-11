@@ -18,10 +18,11 @@ pthread_mutex_t seatCountLock = PTHREAD_MUTEX_INITIALIZER;
 
 struct dentistry
 {
-pthread_t id[15];
+pthread_t id[16];
 int numberOfFreeWRSeats;
 int patientCount = 0;
 int totalPatients;
+bool ready = true;
 };
 
 int main(){
@@ -46,6 +47,7 @@ cin >> strTotalPatients;
 int numberOfFreeSeatsReset = dStruct->numberOfFreeWRSeats = stoi(strSeatCount);
 int totalPatientsReset = dStruct->totalPatients = stoi(strTotalPatients);
 
+
 pthread_create(&dStruct->id[0], NULL, Dentist, (void*) dStruct);
 pthread_create(&dStruct->id[1], NULL, Customer, (void*) dStruct);
 
@@ -55,6 +57,7 @@ pthread_cancel(dStruct->id[0]);
 
 dStruct->patientCount = 0;
 dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
+dStruct->ready = true;
 
 pthread_create(&dStruct->id[2], NULL, Dentist, (void*) dStruct);
 pthread_create(&dStruct->id[3], NULL, Customer, (void*) dStruct);
@@ -66,6 +69,7 @@ pthread_cancel(dStruct->id[2]);
 
 dStruct->patientCount = 0;
 dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
+dStruct->ready = true;
 
 pthread_create(&dStruct->id[5], NULL, Dentist, (void*) dStruct);
 for(int i = 6; i < 9; i++)
@@ -77,6 +81,7 @@ pthread_cancel(dStruct->id[5]);
 
 dStruct->patientCount = 0;
 dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
+dStruct->ready = true;
 
 pthread_create(&dStruct->id[10], NULL, Dentist, (void*) dStruct);
 for(int i = 11; i < 16; i++)
@@ -146,7 +151,7 @@ pthread_mutex_lock(&patientCountLock);
 	activeCustomer = dS->patientCount;
 pthread_mutex_unlock(&patientCountLock);
 
-while(dS->patientCount <= dS->totalPatients)
+while(dS->ready)
 	{
 	pthread_mutex_lock(&atomicLock);
 		cout << "Customer " << activeCustomer << " trying to aquire seatCountWriteAccess..." << endl;
@@ -197,7 +202,10 @@ while(dS->patientCount <= dS->totalPatients)
 	pthread_mutex_lock(&patientCountLock);
 		dS->patientCount++;
 		activeCustomer = dS->patientCount;
+		if(dS->patientCount > dS->totalPatients)
+			dS->ready = false;
 	pthread_mutex_unlock(&patientCountLock);
+		
 	}
 
 
