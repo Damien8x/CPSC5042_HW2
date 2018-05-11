@@ -14,14 +14,20 @@ sem_t patientReady;
 pthread_cond_t atomic;
 pthread_mutex_t atomicLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t patientCountLock = PTHREAD_MUTEX_INITIALIZER;
-pthread_t id[15];
+pthread_mutex_t seatCountLock = PTHREAD_MUTEX_INITIALIZER;
 
+struct dentistry
+{
+pthread_t id[15];
 int numberOfFreeWRSeats;
 int patientCount = 0;
 int totalPatients;
-bool dentistHasPatients = true;
+};
 
 int main(){
+
+struct dentistry * dStruct;
+dStruct = new struct dentistry;
 
 sem_init(&dentistReady, 0, 0);
 sem_init(&seatCountWriteAccess, 0, 1);
@@ -37,52 +43,54 @@ cin >> strSeatCount;
 cout << "Enter Number of Patients: " << endl;
 cin >> strTotalPatients;
 
-int numberOfFreeSeatsReset = numberOfFreeWRSeats = stoi(strSeatCount);
-int totalPatientsReset = totalPatients = stoi(strTotalPatients);
+int numberOfFreeSeatsReset = dStruct->numberOfFreeWRSeats = stoi(strSeatCount);
+int totalPatientsReset = dStruct->totalPatients = stoi(strTotalPatients);
 
-pthread_create(&id[0], NULL, Dentist, NULL);
-pthread_create(&id[1], NULL, Customer, NULL);
+pthread_create(&dStruct->id[0], NULL, Dentist, (void*) dStruct);
+pthread_create(&dStruct->id[1], NULL, Customer, (void*) dStruct);
 
-pthread_join(id[0], NULL);
-pthread_join(id[1], NULL);
+pthread_join(dStruct->id[0], NULL);
+pthread_join(dStruct->id[1], NULL);
 
-patientCount = 0;
-numberOfFreeWRSeats = numberOfFreeSeatsReset;
+dStruct->patientCount = 0;
+dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
 
-pthread_create(&id[2], NULL, Dentist, NULL);
-pthread_create(&id[3], NULL, Customer, NULL);
-pthread_create(&id[4], NULL, Customer, NULL);
+pthread_create(&dStruct->id[2], NULL, Dentist, (void*) dStruct);
+pthread_create(&dStruct->id[3], NULL, Customer, (void*) dStruct);
+pthread_create(&dStruct->id[4], NULL, Customer, (void*) dStruct);
 
 for(int i = 2; i < 5; i++)
-	pthread_join(id[i], NULL);
+	pthread_join(dStruct->id[i], NULL);
 
-patientCount = 0;
-numberOfFreeWRSeats = numberOfFreeSeatsReset;
+dStruct->patientCount = 0;
+dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
 
-pthread_create(&id[5], NULL, Dentist, NULL);
+pthread_create(&dStruct->id[5], NULL, Dentist, (void*) dStruct);
 for(int i = 6; i < 9; i++)
-	pthread_create(&id[i], NULL, Customer, NULL);
+	pthread_create(&dStruct->id[i], NULL, Customer, (void*) dStruct);
 
 for(int i = 5; i < 9; i++)
-	pthread_join(id[i], NULL);
+	pthread_join(dStruct->id[i], NULL);
 
-patientCount = 0;
-numberOfFreeWRSeats = numberOfFreeSeatsReset;
+dStruct->patientCount = 0;
+dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
 
-pthread_create(&id[10], NULL, Dentist, NULL);
+pthread_create(&dStruct->id[10], NULL, Dentist, (void*) dStruct);
 for(int i = 11; i < 16; i++)
-	pthread_create(&id[i], NULL, Customer, NULL);
+	pthread_create(&dStruct->id[i], NULL, Customer, dStruct);
 
 for(int i = 10; i < 16; i++)
-	pthread_join(id[i], NULL);
+	pthread_join(dStruct->id[i], NULL);
 
 return 0;
 }
 
-void * Dentist(void * unused)
+void * Dentist(void * dStruct)
 {
 
-while(dentistHasPatients)
+struct dentistry * dS = (struct dentistry *) dStruct;
+
+while(dS->patientCount <= dS->totalPatients)
 	{
 	pthread_mutex_lock(&atomicLock);
 		cout << "Dentist trying to aquire patient..." << endl;
@@ -95,10 +103,12 @@ while(dentistHasPatients)
 	pthread_mutex_unlock(&atomicLock);
 	
 	sem_wait(&seatCountWriteAccess);
-		numberOfFreeWRSeats +=1;
+		pthread_mutex_lock(&seatCountLock);
+		dS->numberOfFreeWRSeats +=1;
+		pthread_mutex_unlock(&seatCountLock);
 
 		pthread_mutex_lock(&atomicLock);
-			cout << "Incremented free seats to " << numberOfFreeWRSeats << endl;	
+			cout << "Incremented free seats to " << dS->numberOfFreeWRSeats << endl;	
 		pthread_mutex_unlock(&atomicLock);
 
 	pthread_mutex_lock(&atomicLock);
@@ -118,33 +128,36 @@ while(dentistHasPatients)
 	pthread_mutex_unlock(&atomicLock);
 	}
 
-return unused;
+return (void*)dS;
 
 }
 
-void * Customer(void * unused)
+void * Customer(void * dStruct)
 {
-
+struct dentistry * dS = (struct dentistry *) dStruct;
 int activeCustomer;
 
 pthread_mutex_lock(&patientCountLock);
-	patientCount++;
-	activeCustomer = patientCount;
+	dS->patientCount++;
+	activeCustomer = dS->patientCount;
 pthread_mutex_unlock(&patientCountLock);
 
-while(patientCount <= totalPatients)
+while(dS->patientCount <= dS->totalPatients)
 	{
 	pthread_mutex_lock(&atomicLock);
 		cout << "Customer " << activeCustomer << " trying to aquire seatCountWriteAccess..." << endl;
 	pthread_mutex_unlock(&atomicLock);
 	sem_wait(&seatCountWriteAccess);
 	
-		if(numberOfFreeWRSeats > 0)
+		if(dS->numberOfFreeWRSeats > 0)
 		{
-			numberOfFreeWRSeats -= 1;
+			pthread_mutex_lock(&seatCountLock);
+			dS->numberOfFreeWRSeats -= 1;
+			pthread_mutex_unlock(&seatCountLock);
+
 			pthread_mutex_lock(&atomicLock);
 				cout << "Customer " << activeCustomer << " seated; Remaining chairs = " <<
-					numberOfFreeWRSeats << "." << endl;
+					dS->numberOfFreeWRSeats << "." << endl;
 			pthread_mutex_unlock(&atomicLock);
 			
 			pthread_mutex_lock(&atomicLock);
@@ -166,6 +179,7 @@ while(patientCount <= totalPatients)
 			pthread_mutex_lock(&atomicLock);
 				cout << "Customer " << activeCustomer << " consulting dentist..." << endl;
 			pthread_mutex_unlock(&atomicLock);
+			
 		}
 		else
 		{
@@ -177,11 +191,12 @@ while(patientCount <= totalPatients)
 	
 		}
 	pthread_mutex_lock(&patientCountLock);
-		patientCount++;
-		activeCustomer = patientCount;
+		dS->patientCount++;
+		activeCustomer = dS->patientCount;
 	pthread_mutex_unlock(&patientCountLock);
 	}
 
-dentistHasPatients = false;
-return unused;
+
+
+return (void*) dS;
 }
