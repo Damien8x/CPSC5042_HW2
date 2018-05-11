@@ -49,8 +49,9 @@ int totalPatientsReset = dStruct->totalPatients = stoi(strTotalPatients);
 pthread_create(&dStruct->id[0], NULL, Dentist, (void*) dStruct);
 pthread_create(&dStruct->id[1], NULL, Customer, (void*) dStruct);
 
-pthread_join(dStruct->id[0], NULL);
+
 pthread_join(dStruct->id[1], NULL);
+pthread_cancel(dStruct->id[0]);
 
 dStruct->patientCount = 0;
 dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
@@ -59,8 +60,9 @@ pthread_create(&dStruct->id[2], NULL, Dentist, (void*) dStruct);
 pthread_create(&dStruct->id[3], NULL, Customer, (void*) dStruct);
 pthread_create(&dStruct->id[4], NULL, Customer, (void*) dStruct);
 
-for(int i = 2; i < 5; i++)
+for(int i = 3; i < 5; i++)
 	pthread_join(dStruct->id[i], NULL);
+pthread_cancel(dStruct->id[2]);
 
 dStruct->patientCount = 0;
 dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
@@ -69,18 +71,20 @@ pthread_create(&dStruct->id[5], NULL, Dentist, (void*) dStruct);
 for(int i = 6; i < 9; i++)
 	pthread_create(&dStruct->id[i], NULL, Customer, (void*) dStruct);
 
-for(int i = 5; i < 9; i++)
+for(int i = 6; i < 9; i++)
 	pthread_join(dStruct->id[i], NULL);
+pthread_cancel(dStruct->id[5]);
 
 dStruct->patientCount = 0;
 dStruct->numberOfFreeWRSeats = numberOfFreeSeatsReset;
 
 pthread_create(&dStruct->id[10], NULL, Dentist, (void*) dStruct);
 for(int i = 11; i < 16; i++)
-	pthread_create(&dStruct->id[i], NULL, Customer, dStruct);
+	pthread_create(&dStruct->id[i], NULL, Customer, (void*) dStruct);
 
-for(int i = 10; i < 16; i++)
+for(int i = 11; i < 16; i++)
 	pthread_join(dStruct->id[i], NULL);
+pthread_cancel(dStruct->id[10]);
 
 return 0;
 }
@@ -90,7 +94,7 @@ void * Dentist(void * dStruct)
 
 struct dentistry * dS = (struct dentistry *) dStruct;
 
-while(dS->patientCount <= dS->totalPatients)
+while(true)
 	{
 	pthread_mutex_lock(&atomicLock);
 		cout << "Dentist trying to aquire patient..." << endl;
