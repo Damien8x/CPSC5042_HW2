@@ -5,13 +5,13 @@
 
 using namespace std;
 
-void * Dentist(void * unused);
-void * Customer(void * unused);
+void * Dentist(void * dStruct);
+void * Customer(void * dStruct);
 
 sem_t dentistReady;
 sem_t seatCountWriteAccess;
 sem_t patientReady;
-pthread_cond_t atomic;
+//pthread_cond_t atomic;
 pthread_mutex_t atomicLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t patientCountLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t seatCountLock = PTHREAD_MUTEX_INITIALIZER;
@@ -36,8 +36,6 @@ sem_init(&patientReady, 0, 0);
 
 string strSeatCount;
 string strTotalPatients;
-
-
 
 cout << "Enter Number of Seats: " << endl;
 cin >> strSeatCount;
@@ -112,11 +110,9 @@ while(true)
 	pthread_mutex_unlock(&atomicLock);
 	
 	sem_wait(&seatCountWriteAccess);
-		pthread_mutex_lock(&seatCountLock);
-		dS->numberOfFreeWRSeats +=1;
-		pthread_mutex_unlock(&seatCountLock);
-
+		
 		pthread_mutex_lock(&atomicLock);
+		dS->numberOfFreeWRSeats +=1;
 			cout << "Incremented free seats to " << dS->numberOfFreeWRSeats << endl;	
 		pthread_mutex_unlock(&atomicLock);
 
@@ -160,24 +156,20 @@ while(dS->ready)
 	
 		if(dS->numberOfFreeWRSeats > 0)
 		{
-			pthread_mutex_lock(&seatCountLock);
-			dS->numberOfFreeWRSeats -= 1;
-			pthread_mutex_unlock(&seatCountLock);
-
-			pthread_mutex_lock(&atomicLock);
-				cout << "Customer " << activeCustomer << " seated; Remaining chairs = " <<
-					dS->numberOfFreeWRSeats << "." << endl;
-			pthread_mutex_unlock(&atomicLock);
 			
 			pthread_mutex_lock(&atomicLock);
-				cout << "Customer " << activeCustomer << " notifying dentist patientReady." <<
-					endl;
+			dS->numberOfFreeWRSeats -= 1;
+				cout << "Customer " << activeCustomer << " seated; Remaining chairs = " << dS->numberOfFreeWRSeats << "." << endl;
+			pthread_mutex_unlock(&atomicLock);
+		
+			
+			pthread_mutex_lock(&atomicLock);
+				cout << "Customer " << activeCustomer << " notifying dentist patientReady." << endl;
 			pthread_mutex_unlock(&atomicLock);
 			sem_post(&patientReady);
 
 			pthread_mutex_lock(&atomicLock);
-			 	cout << "Customer " << activeCustomer << " releasing seatCountWriteAccess..." <<
-					endl;
+			 	cout << "Customer " << activeCustomer << " releasing seatCountWriteAccess..." << endl;
 			pthread_mutex_unlock(&atomicLock);
 			sem_post(&seatCountWriteAccess);
 
@@ -193,8 +185,7 @@ while(dS->ready)
 		else
 		{
 		pthread_mutex_lock(&atomicLock);
-			cout << "Customer " << activeCustomer << " leaving without consulting; " <<
-				"no chairs available..." << endl;
+			cout << "Customer " << activeCustomer << " leaving without consulting; no chairs available..." << endl;
 		pthread_mutex_unlock(&atomicLock);
 		sem_post(&seatCountWriteAccess);
 	
