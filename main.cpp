@@ -188,6 +188,10 @@ pthread_mutex_unlock(&patientCountLock);
 //while loop simulates logic laid out per assignment guidelines
 //All output share the SAME lock mutex to ensure output is pritned
 //in their entirety.
+	pthread_mutex_lock(&patientCountLock);
+	if(dS->patientCount > dS->totalPatients)
+			dS->ready = false;
+	pthread_mutex_unlock(&patientCountLock);
 
 while(dS->ready)
 	{
