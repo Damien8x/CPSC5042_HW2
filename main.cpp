@@ -20,18 +20,22 @@ sem_t patientReady;
 
 
 
-//declare/initialize locks for output and seat increments
+//declare/initialize locks for output, seat increment/decrement, patient count increment
 pthread_mutex_t atomicLock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t freeSeatCountLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t patientCountLock = PTHREAD_MUTEX_INITIALIZER;
 
+//struct contains shared variables passed to threads
 struct DC
 {
 int numberOfFreeWRSeats = 0;
 int patientCount = 0;
 };
 
+//main function accepts 2 command line arguments
 int main(int argc, char *argv[]){
 
+//create struct on heap memory
 struct DC * dc;
 dc = new struct DC;
 
@@ -62,11 +66,15 @@ pthread_join(dentistThreadID, NULL);
 return 0;
 }
 
-
+//dentist thread
 void * Dentist(void * dc)
 {
+//argument to DC struct through casting
 struct DC * dcStruct = (struct DC *) dc;
 
+//while loop simulates assignment specifications. All output share "atomicLock"
+//to ensure complete printing. Incrementing of numberOfFreeWRSeats is locked
+//to ensure atomic execution.
 while(true)
 	{
 	pthread_mutex_lock(&atomicLock);
@@ -103,20 +111,30 @@ while(true)
 	pthread_mutex_unlock(&atomicLock);
 	}
 
+//return struct (will never execute due to infinite for loop
 return (void*) dcStruct;
 
 }
 
 void * Customer(void * dc)
 {
+//argument to DC struct through casting
 struct DC * dcStruct = (struct DC *) dc;
+
+//declare activeCustomer integer used for print statements tracking threads patient number
 int activeCustomer;
+
+//lock ensures shared variable, patientCount, is incremented and value assigned to activeCustomer
+//atomically, guaranteeing no other thread will have a duplicate patientCount/activeCustomer value.
 pthread_mutex_lock(&patientCountLock);
 	dcStruct->patientCount++;
 	activeCustomer = dcStruct->patientCount;
 pthread_mutex_unlock(&patientCountLock);
 
-
+//infinite while loop designed to simulate assignment specifications
+//all output shares a lock to ensure complete output. numberOFFreeWRSeats is locked
+//to ensure atomic execution amongst multiple threads. Sole if statement is locked
+//to ensure prevention of non intended threads entering statement due to context switch 
 while(true)
 	{
 	pthread_mutex_lock(&atomicLock);
@@ -125,11 +143,9 @@ while(true)
 
 	sem_wait(&seatCountWriteAccess);
 
-
+	pthread_mutex_lock(&atomicLock);
 	if(dcStruct->numberOfFreeWRSeats > 0)
 	{
-
-	pthread_mutex_lock(&atomicLock);
 		dcStruct->numberOfFreeWRSeats -= 1;
 		cout << "Customer "<<activeCustomer<<" seated; Remaining chairs= "<<dcStruct->numberOfFreeWRSeats<< "."<< endl;
 	pthread_mutex_unlock(&atomicLock);
@@ -159,14 +175,13 @@ while(true)
 	}
 	else
 	{
-	pthread_mutex_lock(&atomicLock);
-		cout << "Customer " << activeCustomer << " leaving without consulting; no chairs available..." << endl;
+	cout << "Customer " << activeCustomer << " leaving without consulting; no chairs available..." << endl;
 	pthread_mutex_unlock(&atomicLock);
 
 	sem_post(&seatCountWriteAccess);
 
 	}
 	}
-
+//return statment will never execute due to infinite loop
 return (void*) dcStruct;
 }
