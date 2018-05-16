@@ -18,17 +18,22 @@ sem_t dentistReady;
 sem_t seatCountWriteAccess;
 sem_t patientReady;
 
-//create global variable for seat count
-int numberOfFreeWRSeats = 0;
+
 
 //declare/initialize locks for output and seat increments
 pthread_mutex_t atomicLock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t seatCountLock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t patientCountLock = PTHREAD_MUTEX_INITIALIZER;
 
+struct DC
+{
+int numberOfFreeWRSeats = 0;
+int patientCount = 0;
+};
 
 int main(int argc, char *argv[]){
 
-
+struct DC * dc;
+dc = new struct DC;
 
 //initialize semaphores to their starting values
 sem_init(&dentistReady, 0, 0);
@@ -36,7 +41,7 @@ sem_init(&seatCountWriteAccess, 0, 1);
 sem_init(&patientReady, 0, 0);
 
 //cast command line input to integers and assign to variables
-numberOfFreeWRSeats = stoi(argv[1]);
+dc->numberOfFreeWRSeats = stoi(argv[1]);
 int totalPatients = stoi(argv[2]);
 
 //create thread ids for all necessary threads
@@ -44,16 +49,12 @@ pthread_t customerID[totalPatients];
 pthread_t dentistThreadID;
 
 //create 1 dentist thread
-pthread_create(&dentistThreadID, NULL, Dentist, NULL);
+pthread_create(&dentistThreadID, NULL, Dentist, (void*) dc);
 
 //use for loop to create an equal number of Customer threads
 //to second integer argument from user
-int patientCount = 0;
 for(int i = 0; i < totalPatients; i++)
-{
-	patientCount++;
- 	pthread_create(&customerID[i], NULL, Customer, (void*) &patientCount);
-}
+	pthread_create(&customerID[i], NULL, Customer, (void*) dc);
 
 //join used as barrier to prevent process from exiting while threads running
 pthread_join(dentistThreadID, NULL);
@@ -62,8 +63,9 @@ return 0;
 }
 
 
-void * Dentist(void * unused)
+void * Dentist(void * dc)
 {
+struct DC * dcStruct = (struct DC *) dc;
 
 while(true)
 	{
@@ -80,8 +82,8 @@ while(true)
 	sem_wait(&seatCountWriteAccess);
 		
 	pthread_mutex_lock(&atomicLock);
-		numberOfFreeWRSeats +=1;
-		cout << "Incremented free seats to " << numberOfFreeWRSeats << endl;	
+		dcStruct->numberOfFreeWRSeats +=1;
+		cout << "Incremented free seats to " << dcStruct->numberOfFreeWRSeats << endl;	
 	pthread_mutex_unlock(&atomicLock);
 
 	pthread_mutex_lock(&atomicLock);
@@ -101,14 +103,18 @@ while(true)
 	pthread_mutex_unlock(&atomicLock);
 	}
 
-return (void*) unused;
+return (void*) dcStruct;
 
 }
 
-void * Customer(void * patientNumber)
+void * Customer(void * dc)
 {
-
-int activeCustomer = *((int *)patientNumber);
+struct DC * dcStruct = (struct DC *) dc;
+int activeCustomer;
+pthread_mutex_lock(&patientCountLock);
+	dcStruct->patientCount++;
+	activeCustomer = dcStruct->patientCount;
+pthread_mutex_unlock(&patientCountLock);
 
 
 while(true)
@@ -120,12 +126,12 @@ while(true)
 	sem_wait(&seatCountWriteAccess);
 
 
-	if(numberOfFreeWRSeats > 0)
+	if(dcStruct->numberOfFreeWRSeats > 0)
 	{
 
 	pthread_mutex_lock(&atomicLock);
-		numberOfFreeWRSeats -= 1;
-		cout << "Customer "<<activeCustomer<<" seated; Remaining chairs= "<<numberOfFreeWRSeats<< "."<< endl;
+		dcStruct->numberOfFreeWRSeats -= 1;
+		cout << "Customer "<<activeCustomer<<" seated; Remaining chairs= "<<dcStruct->numberOfFreeWRSeats<< "."<< endl;
 	pthread_mutex_unlock(&atomicLock);
 		
 	pthread_mutex_lock(&atomicLock);
@@ -162,5 +168,5 @@ while(true)
 	}
 	}
 
-return (void*) patientNumber;
+return (void*) dcStruct;
 }
